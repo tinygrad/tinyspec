@@ -85,7 +85,9 @@ Unary & $(T,)$
 & & \op{Bitcast}
   & Reinterpret bits as target dtype. Must be same size. \\
 & & \op{Copy}
-  & Copy to target device (specified in arg). \\[4pt]
+  & Copy to target device (specified in arg). \\
+& & \op{Contiguous}
+  & Force a contiguous memory layout. Identity on data. \\[4pt]
 Binary & $(A, B)$
   & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
   & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
@@ -139,6 +141,7 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \op{Vectorize} & $(x_0, x_1, \ldots)$ & --- & Group scalars into a tuple. Used to represent shapes. \\
 \op{Index} & (buf, $i_0$, $i_1$, \ldots) & --- & Index from the left: $k$ indices consume $k$ leading dims. \\
 \op{Bufferize} & $(T, r_0, r_1, \ldots)$ & --- & Inverse of \op{Index}: ends \op{Range}s, shape from ranges. \\
+\op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence for a kernel. \\
 \bottomrule
 \end{tabular}
