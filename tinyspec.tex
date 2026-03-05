@@ -10,6 +10,7 @@
 \newcommand{\op}[1]{\textsc{#1}}
 
 \definecolor{movgreen}{HTML}{2E7D32}
+\definecolor{reducered}{HTML}{C62828}
 \definecolor{elwyellow}{HTML}{F9A825}
 \definecolor{callblue}{HTML}{1565C0}
 
@@ -57,6 +58,17 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \end{tabular}
 
 %% ============================================================
+\subsection*{{\color{reducered}Reduce Ops} \normalfont\small--- inverse of \op{Expand}: collapse axes of size $s_k$ to $1$}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Reduce} & $(T, \mathbf{s'})$ & \op{Add} or \op{Max} & Sum or max over axes where $s'_k = 1$ and $s_k > 1$. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
 \subsection*{{\color{elwyellow}Elementwise Ops} \normalfont\small--- all inputs same shape, output same shape, applied per-element}
 
 \begin{tabular}{@{}l l l l@{}}
@@ -67,7 +79,9 @@ Unary & $(T,)$
   & \op{Exp2}, \op{Log2}, \op{Sin}, \op{Sqrt}, \op{Neg}, \op{Recip}
   & $2^x$, $\log_2 x$, $\sin x$, $\sqrt{x}$, $-x$, $1/x$ \\
 & & \op{Cast}
-  & Convert to target dtype (specified in arg). \\[4pt]
+  & Convert to target dtype (specified in arg). \\
+& & \op{Bitcast}
+  & Reinterpret bits as target dtype. Must be same size. \\[4pt]
 Binary & $(A, B)$
   & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
   & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
