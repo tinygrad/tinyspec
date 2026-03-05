@@ -11,6 +11,7 @@
 
 \definecolor{movgreen}{HTML}{2E7D32}
 \definecolor{elwyellow}{HTML}{F9A825}
+\definecolor{callblue}{HTML}{1565C0}
 
 \title{tinygrad: a single dialect from Tensor programs to command buffers}
 \author{}
@@ -22,37 +23,36 @@
 
 \section*{UOps}
 
-All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps.
-
-Let $T$ be a tensor with shape $(s_0, \ldots, s_{n-1})$. We index elements as $T[i_0, \ldots, i_{n-1}]$ where $0 \le i_k < s_k$.
+All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has two derived properties, \textbf{dtype} and \textbf{shape}, determined by the rules at the end of this document.
 
 %% ============================================================
-\subsection*{Source Ops \normalfont\small--- leaf nodes, $\mathrm{src} = ()$}
+\subsection*{Source Ops \normalfont\small--- leaf nodes}
 
-\begin{tabular}{@{}l l p{9cm}@{}}
+\begin{tabular}{@{}l l l l@{}}
 \toprule
-\textbf{Op} & \textbf{arg} & \textbf{Semantics} \\
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Buffer} & dtype &
+\op{Buffer} & () & size, dtype &
   A flat allocation of memory with shape $(\textit{size},)$. \\[4pt]
-\op{Const} & scalar value &
-  A scalar constant with shape $(\ )$. \\
+\op{Const} & () & value, dtype &
+  A scalar constant with shape $(\ )$. \\[4pt]
+\op{Param} & $(\mathbf{s},)$ & slot, dtype & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\
 \bottomrule
 \end{tabular}
 
 %% ============================================================
-\subsection*{{\color{movgreen}Movement Ops} \normalfont\small--- src: $(T,)$, shape in $\to$ shape out, no arithmetic}
+\subsection*{{\color{movgreen}Movement Ops} \normalfont\small--- no arithmetic, shapes are \op{Vectorize} UOps in src}
 
-\begin{tabular}{@{}l l l@{}}
+\begin{tabular}{@{}l l l l@{}}
 \toprule
-\textbf{Op} & \textbf{arg} & \textbf{Semantics} \\
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Reshape} & shape $\mathbf{s'}$ & Reinterpret elements in row-major order. $\prod s_k = \prod s'_k$. \\
-\op{Expand} & shape $\mathbf{s'}$ & Broadcast size-1 axes. $s_k \in \{1, s'_k\}$. \\
-\op{Pad} & shape $\mathbf{s'}$ & Pad right side with $0$s to a larger shape. \\
-\op{Shrink} & shape $\mathbf{s'}$ & Shrink from the right side. Inverse of \op{Pad}. \\
-\op{Permute} & axis order $\pi$ & Reorder axes. $\pi = (1,0)$ is transpose. \\
-\op{Flip} & bools $(f_0,\ldots,f_{n-1})$ & Reverse along flagged axes. \\
+\op{Reshape} & $(T, \mathbf{s'})$ & --- & Reinterpret in row-major order. $\prod s_k = \prod s'_k$. \\
+\op{Expand} & $(T, \mathbf{s'})$ & --- & Broadcast size-1 axes. $s_k \in \{1, s'_k\}$. \\
+\op{Pad} & $(T, \mathbf{s'})$ & --- & Pad right side with $0$s to a larger shape. \\
+\op{Shrink} & $(T, \mathbf{s'})$ & --- & Shrink from the right side. Inverse of \op{Pad}. \\
+\op{Permute} & $(T,)$ & axis order $\pi$ & Reorder axes. $\pi = (1,0)$ is transpose. \\
+\op{Flip} & $(T,)$ & bools $\mathbf{f}$ & Reverse along flagged axes. \\
 \bottomrule
 \end{tabular}
 
@@ -65,7 +65,9 @@ Let $T$ be a tensor with shape $(s_0, \ldots, s_{n-1})$. We index elements as $T
 \midrule
 Unary & $(T,)$
   & \op{Exp2}, \op{Log2}, \op{Sin}, \op{Sqrt}, \op{Neg}, \op{Recip}
-  & $2^x$, $\log_2 x$, $\sin x$, $\sqrt{x}$, $-x$, $1/x$ \\[4pt]
+  & $2^x$, $\log_2 x$, $\sin x$, $\sqrt{x}$, $-x$, $1/x$ \\
+& & \op{Cast}
+  & Convert to target dtype (specified in arg). \\[4pt]
 Binary & $(A, B)$
   & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
   & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
@@ -81,5 +83,60 @@ Ternary & $(P, A, B)$
 
 \smallskip
 Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt} with swapped operands.
+
+%% ============================================================
+\subsection*{{\color{callblue}Call Ops} \normalfont\small--- function abstraction, like the lambda calculus}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{Other Ops}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Vectorize} & $(x_0, x_1, \ldots)$ & --- & Group scalars into a tuple. Used to represent shapes. \\
+\op{Range} & $(\text{bound},)$ & --- & Iterator from $0$ to bound. \\
+\op{Index} & (buf, $i_0$, $i_1$, \ldots) & --- & Index from the left: $k$ indices consume $k$ leading dims. \\
+\op{Store} & (buf, val) & --- & Store val into buf. \\
+\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence for a kernel. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{Derived Properties}
+
+Every UOp has a \textbf{dtype} and \textbf{shape}, derived from its op, src, and arg:
+
+\medskip
+\begin{tabular}{@{}l l l@{}}
+\toprule
+\textbf{Op} & \textbf{dtype} & \textbf{shape} \\
+\midrule
+\op{Buffer} & from arg & $(\text{size},)$ from arg \\
+\op{Const} & from arg & $()$ \\
+\op{Param} & from arg & from $\mathrm{src}[0]$ \\[3pt]
+\op{Reshape}, \op{Expand}, \op{Pad}, \op{Shrink} & $\mathrm{src}[0].\mathrm{dtype}$ & from $\mathrm{src}[1]$ \\
+\op{Permute} & $\mathrm{src}[0].\mathrm{dtype}$ & permute $\mathrm{src}[0].\mathrm{shape}$ by $\pi$ \\
+\op{Flip} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\[3pt]
+\op{Cast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ \\
+ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
+ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
+\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{src}[0].\mathrm{shape}$ \\
+\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\[3pt]
+\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes \\
+\op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining: $(s_k, \ldots, s_{n-1})$ \\
+\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ \\
+\op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
+\bottomrule
+\end{tabular}
 
 \end{document}
