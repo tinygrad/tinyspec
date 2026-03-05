@@ -24,7 +24,7 @@
 
 \section*{UOps}
 
-All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has two derived properties, \textbf{dtype} and \textbf{shape}, determined by the rules at the end of this document.
+All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has three derived properties --- \textbf{dtype}, \textbf{shape}, and \textbf{device} --- determined by the rules at the end of this document.
 
 %% ============================================================
 \subsection*{Source Ops \normalfont\small--- leaf nodes}
@@ -33,11 +33,12 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Buffer} & () & size, dtype &
+\op{Buffer} & () & size, dtype, device &
   A flat allocation of memory with shape $(\textit{size},)$. \\[4pt]
 \op{Const} & () & value, dtype &
   A scalar constant with shape $(\ )$. \\[4pt]
-\op{Param} & $(\mathbf{s},)$ & slot, dtype & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\
+\op{Var} & (min, max) & slot, dtype & A symbolic variable in range $[\text{min}, \text{max}]$. Shape $(\ )$. \\[4pt]
+\op{Param} & $(\mathbf{s},)$ & slot, dtype, device & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\
 \bottomrule
 \end{tabular}
 
@@ -81,7 +82,9 @@ Unary & $(T,)$
 & & \op{Cast}
   & Convert to target dtype (specified in arg). \\
 & & \op{Bitcast}
-  & Reinterpret bits as target dtype. Must be same size. \\[4pt]
+  & Reinterpret bits as target dtype. Must be same size. \\
+& & \op{Copy}
+  & Copy to target device (specified in arg). \\[4pt]
 Binary & $(A, B)$
   & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
   & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
@@ -128,28 +131,29 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 %% ============================================================
 \subsection*{Derived Properties}
 
-Every UOp has a \textbf{dtype} and \textbf{shape}, derived from its op, src, and arg:
+Every UOp has a \textbf{dtype}, \textbf{shape}, and \textbf{device}, derived from its op, src, and arg:
 
 \medskip
-\begin{tabular}{@{}l l l@{}}
+\begin{tabular}{@{}l l l l@{}}
 \toprule
-\textbf{Op} & \textbf{dtype} & \textbf{shape} \\
+\textbf{Op} & \textbf{dtype} & \textbf{shape} & \textbf{device} \\
 \midrule
-\op{Buffer} & from arg & $(\text{size},)$ from arg \\
-\op{Const} & from arg & $()$ \\
-\op{Param} & from arg & from $\mathrm{src}[0]$ \\[3pt]
-\op{Reshape}, \op{Expand}, \op{Pad}, \op{Shrink} & $\mathrm{src}[0].\mathrm{dtype}$ & from $\mathrm{src}[1]$ \\
-\op{Permute} & $\mathrm{src}[0].\mathrm{dtype}$ & permute $\mathrm{src}[0].\mathrm{shape}$ by $\pi$ \\
-\op{Flip} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\[3pt]
-\op{Cast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ \\
-ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
-ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
-\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{src}[0].\mathrm{shape}$ \\
-\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\[3pt]
-\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes \\
-\op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining: $(s_k, \ldots, s_{n-1})$ \\
-\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ \\
-\op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ \\
+\op{Buffer} & from arg & $(\text{size},)$ from arg & from arg \\
+\op{Const} & from arg & $()$ & \textsc{null} \\
+\op{Var} & from arg & $()$ & \textsc{null} \\
+\op{Param} & from arg & from $\mathrm{src}[0]$ & from arg \\[3pt]
+Movement ops & $\mathrm{src}[0].\mathrm{dtype}$ & (see op) & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{Reduce} & $\mathrm{src}[0].\mathrm{dtype}$ & from $\mathrm{src}[1]$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
+\op{Cast}, \op{Bitcast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{Copy} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & from arg \\
+ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
+ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
+\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ \\
+\op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining: $(s_k, \ldots, s_{n-1})$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
 \bottomrule
 \end{tabular}
 
