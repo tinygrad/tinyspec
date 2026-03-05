@@ -1,0 +1,85 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+
+\newcommand{\op}[1]{\textsc{#1}}
+
+\definecolor{movgreen}{HTML}{2E7D32}
+\definecolor{elwyellow}{HTML}{F9A825}
+
+\title{tinygrad: a single dialect from Tensor programs to command buffers}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section*{UOps}
+
+All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps.
+
+Let $T$ be a tensor with shape $(s_0, \ldots, s_{n-1})$. We index elements as $T[i_0, \ldots, i_{n-1}]$ where $0 \le i_k < s_k$.
+
+%% ============================================================
+\subsection*{Source Ops \normalfont\small--- leaf nodes, $\mathrm{src} = ()$}
+
+\begin{tabular}{@{}l l p{9cm}@{}}
+\toprule
+\textbf{Op} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Buffer} & dtype &
+  A flat allocation of memory with shape $(\textit{size},)$. \\[4pt]
+\op{Const} & scalar value &
+  A scalar constant with shape $(\ )$. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{{\color{movgreen}Movement Ops} \normalfont\small--- src: $(T,)$, shape in $\to$ shape out, no arithmetic}
+
+\begin{tabular}{@{}l l l@{}}
+\toprule
+\textbf{Op} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Reshape} & shape $\mathbf{s'}$ & Reinterpret elements in row-major order. $\prod s_k = \prod s'_k$. \\
+\op{Expand} & shape $\mathbf{s'}$ & Broadcast size-1 axes. $s_k \in \{1, s'_k\}$. \\
+\op{Pad} & shape $\mathbf{s'}$ & Pad right side with $0$s to a larger shape. \\
+\op{Shrink} & shape $\mathbf{s'}$ & Shrink from the right side. Inverse of \op{Pad}. \\
+\op{Permute} & axis order $\pi$ & Reorder axes. $\pi = (1,0)$ is transpose. \\
+\op{Flip} & bools $(f_0,\ldots,f_{n-1})$ & Reverse along flagged axes. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{{\color{elwyellow}Elementwise Ops} \normalfont\small--- all inputs same shape, output same shape, applied per-element}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Arity} & \textbf{src} & \textbf{Op} & \textbf{Semantics} \\
+\midrule
+Unary & $(T,)$
+  & \op{Exp2}, \op{Log2}, \op{Sin}, \op{Sqrt}, \op{Neg}, \op{Recip}
+  & $2^x$, $\log_2 x$, $\sin x$, $\sqrt{x}$, $-x$, $1/x$ \\[4pt]
+Binary & $(A, B)$
+  & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
+  & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
+& & \op{CmpLt}, \op{CmpNe}
+  & $[a < b]$, $[a \ne b]$ \\
+& & \op{Xor}, \op{Or}, \op{And}, \op{Shr}, \op{Shl}
+  & $a \oplus b$, $a \mid b$, $a \mathbin{\&} b$, $a \gg b$, $a \ll b$ \\[4pt]
+Ternary & $(P, A, B)$
+  & \op{Where}
+  & $A[\mathbf{i}]$ if $P[\mathbf{i}] \ne 0$, else $B[\mathbf{i}]$ \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt} with swapped operands.
+
+\end{document}
