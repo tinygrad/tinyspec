@@ -13,6 +13,7 @@
 \definecolor{reducered}{HTML}{C62828}
 \definecolor{elwyellow}{HTML}{F9A825}
 \definecolor{callblue}{HTML}{1565C0}
+\definecolor{assigngray}{HTML}{616161}
 
 \title{tinygrad: a single dialect from Tensor programs to command buffers}
 \author{}
@@ -109,8 +110,24 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
 \op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
+\op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
 \bottomrule
 \end{tabular}
+
+%% ============================================================
+\subsection*{{\color{assigngray}Assignment Ops} \normalfont\small--- side effects and ordering}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Store} & (buf, val) & --- & Write val into buf. \\
+\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+Assign is \op{Store} followed by \op{After}: write the value, then return the buffer with an ordering dependency.
 
 %% ============================================================
 \subsection*{Other Ops}
@@ -120,10 +137,8 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
 \op{Vectorize} & $(x_0, x_1, \ldots)$ & --- & Group scalars into a tuple. Used to represent shapes. \\
-\op{Range} & $(\text{bound},)$ & --- & Iterator from $0$ to bound. \\
 \op{Index} & (buf, $i_0$, $i_1$, \ldots) & --- & Index from the left: $k$ indices consume $k$ leading dims. \\
-\op{Store} & (buf, val) & --- & Store val into buf. \\
-\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\op{Bufferize} & $(T, r_0, r_1, \ldots)$ & --- & Inverse of \op{Index}: ends \op{Range}s, shape from ranges. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence for a kernel. \\
 \bottomrule
 \end{tabular}
