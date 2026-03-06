@@ -60,7 +60,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \op{Expand} & $(T, \mathbf{s'})$ & --- & Broadcast size-1 axes. $s_k \in \{1, s'_k\}$. \\
 \op{Pad} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Pad with $0$s: $b_k$ before, $e_k$ after each axis. \\
 \op{Shrink} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Keep $[b_k, e_k)$ per axis. Inverse of \op{Pad}. \\
-\op{Index} & $(T, i_0, i_1, \ldots)$ & --- & Index from the left: $k$ indices consume $k$ leading dims. \\
+\op{Index} & $(T, i_0, i_1, \ldots)$ & --- & Index from left. $()$-shaped $i$ removes dim; $(k,)$-shaped makes it $k$. \\
 \op{Cat} & $(T_0, T_1, \ldots)$ & axis & Join along axis. $-1$ creates a new leading axis. \\
 \bottomrule
 \end{tabular}
@@ -72,7 +72,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Reduce} & $(T, f, \text{init})$ & axes & Reduce $T$ along axes using binary function $f$ with initial value. \\
+\op{Reduce} & $(T,)$ & op, axes & Reduce $T$ along axes. Op is \op{Add}, \op{Max}, or \op{Mul}. \\
 \bottomrule
 \end{tabular}
 
@@ -139,6 +139,7 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \midrule
 \op{Store} & (buf, val) & --- & Write val into buf. \\
 \op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
 \bottomrule
 \end{tabular}
 
@@ -152,8 +153,6 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Bufferize} & $(T, r_0, r_1, \ldots)$ & --- & Inverse of \op{Index}: ends \op{Range}s, shape from ranges. \\
-\op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence for a kernel. \\
 \bottomrule
 \end{tabular}
