@@ -83,6 +83,14 @@ class dtypes:
   default_float = float32
   default_int = int32
 
+  @staticmethod
+  def from_py(x) -> DType:
+    if x.__class__ is float: return dtypes.default_float
+    if x.__class__ is int: return dtypes.default_int
+    if x.__class__ is bool: return dtypes.bool
+    if x.__class__ is list or x.__class__ is tuple: return max(dtypes.from_py(xi) for xi in x) if x else dtypes.default_float
+    raise RuntimeError(f"Could not infer dtype of {x} with type {type(x)}")
+
   floats = (float16, bfloat16, float32, float64)
   uints = (uint8, uint16, uint32, uint64)
   sints = (int8, int16, int32, int64)

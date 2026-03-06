@@ -63,7 +63,11 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
   @property
   def key(self) -> bytes:
     return hashlib.sha256(str((self.op, self.arg)).encode() + b"".join([s.key for s in self.src])).digest()
-  def __repr__(self): return f"UOp({self.op.name}, arg={self.arg!r}, src={self.src})"
+  def __repr__(self):
+    parts = [f"Ops.{self.op.name}"]
+    if self.arg is not None: parts.append(f"arg={self.arg!r}")
+    if self.src: parts.append(f"src={self.src!r}")
+    return f"UOp({', '.join(parts)})"
 
   def toposort(self, gate:Callable|None=None) -> dict[UOp, None]:
     cache: dict[UOp, None] = {}
@@ -164,11 +168,37 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
     if self.op is Ops.AFTER: return self.src[0].shape
     raise NotImplementedError(f"shape not defined for {self.op}")
 
-  # *** stubs for mixins ***
+  # *** constructors ***
 
-  def alu(self, op, *src): raise NotImplementedError
-  def const_like(self, b): raise NotImplementedError
-  def cast(self, dtype): raise NotImplementedError
-  def _mop(self, op, arg): raise NotImplementedError
+  @staticmethod
+  def from_list(lst:list|tuple, dtype:DType|None=None) -> UOp:
+    def _flatten(x):
+      if isinstance(x, (list, tuple)): return [v for item in x for v in _flatten(item)]
+      return [x]
+    def _shape(x):
+      if isinstance(x, (list, tuple)): return (len(x),) + _shape(x[0]) if x else (0,)
+      return ()
+    flat, shape = _flatten(lst), _shape(lst)
+    if dtype is None: dtype = dtypes.from_py(lst)
+    if len(shape) == 1:
+      return UOp(Ops.VCONST, arg=(tuple(flat), dtype))
+    # nested: build VCONST per row, then CAT
+    row_size = len(flat) // shape[0]
+    rows = tuple(UOp(Ops.VCONST, arg=(tuple(flat[i*row_size:(i+1)*row_size]), dtype)) for i in range(shape[0]))
+    return UOp(Ops.CAT, rows, arg=-1)
+
+  # *** mixin implementations ***
+
+  def alu(self, op:Ops, *src:UOp) -> UOp:
+    return UOp(op, (self, *src))
+
+  def const_like(self, b) -> UOp:
+    return UOp(Ops.CONST, arg=(b, self.dtype))
+
+  def cast(self, dtype:DType) -> UOp:
+    return UOp(Ops.CAST, (self,), arg=dtype)
+
+  def _mop(self, op:Ops, arg) -> UOp:
+    return UOp(op, (self,), arg=arg)
 
 sint = int|UOp
