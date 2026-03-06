@@ -15,7 +15,7 @@
 \definecolor{reducered}{HTML}{C62828}
 \definecolor{elwyellow}{HTML}{F9A825}
 \definecolor{callblue}{HTML}{1565C0}
-\definecolor{assigngray}{HTML}{616161}
+\definecolor{assignbrown}{HTML}{795548}
 \definecolor{multipurple}{HTML}{7B1FA2}
 
 \title{tinygrad: a single dialect from Tensor programs to Command Buffers}
@@ -146,7 +146,7 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \end{tabular}
 
 %% ============================================================
-\subsection*{{\color{assigngray}Ordering Ops} \normalfont\small--- execution order}
+\subsection*{{\color{assignbrown}Ordering Ops} \normalfont\small--- execution order}
 
 \begin{tabular}{@{}l l l l@{}}
 \toprule
@@ -161,6 +161,25 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 Assign is \op{Store} followed by \op{After}: write the value, then return the buffer with an ordering dependency.
 
 %% ============================================================
+\subsection*{Codegen Ops \normalfont\small--- generated code primitives}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Load} & (idx,) & --- & Dereference: read element at index from buffer. \\
+\op{Barrier} & (deps\ldots) & --- & Synchronize threads within a workgroup. \\
+\op{Ins} & \ldots & \ldots & A single machine instruction (e.g.\ AMD ISA). \\
+\op{Special} & (bound,) & name & GPU thread/workgroup index (e.g.\ \texttt{gidx0}, \texttt{lidx1}). \\
+\op{If} & (gate,) & --- & Begin conditional execution block. \\
+\op{Endif} & (if,) & --- & End conditional execution block. \\
+\op{End} & (body, range) & --- & Close a \op{Range} loop. \\
+\op{Wmma} & (A, B, acc) & config & Warp matrix multiply-accumulate (tensor cores). \\
+\op{Custom} & (args\ldots) & fmt & Inject custom code string into generated source. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
 \subsection*{Program Ops \normalfont\small--- compilation pipeline stages}
 
 \begin{tabular}{@{}l l l l@{}}
@@ -169,7 +188,6 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \midrule
 \op{Program} & (linear, source, binary) & --- & Compiled kernel: instruction list, source code, machine code. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
-\op{Ins} & \ldots & \ldots & A single machine instruction (e.g.\ AMD ISA). \\
 \op{Source} & () & str & Human-readable rendered source code. \\
 \op{Binary} & () & bytes & Compiled machine code. \\
 \bottomrule
