@@ -6,6 +6,8 @@
 \usepackage{array}
 \usepackage[dvipsnames]{xcolor}
 \usepackage{enumitem}
+\usepackage{listings}
+\lstset{language=Python, basicstyle=\ttfamily\small, columns=fullflexible, keepspaces=true}
 
 \newcommand{\op}[1]{\textsc{#1}}
 
@@ -147,6 +149,46 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \end{tabular}
 
 %% ============================================================
+\subsection*{Common Ops as Compositions}
+
+All high-level tensor operations decompose into the primitives above.
+
+\begin{lstlisting}
+# gemm: C[M,N] = A[M,K] @ B[K,N]
+def gemm(A, B):
+  M,K = A.shape; _,N = B.shape
+  return (A.reshape(M,K,1).expand(M,K,N)
+        * B.reshape(1,K,N).expand(M,K,N)).sum(1).reshape(M,N)
+
+# prefix_sum: cumulative sum via repeat+reshape sliding window trick
+def prefix_sum(T):
+  n = T.shape[0]
+  x = T.pad((n-1, 0))                            # (2n-1,)
+  x = x.reshape(1,2*n-1).expand(n+1,2*n-1)       # tile
+  x = x.reshape((n+1)*(2*n-1)).shrink_to(2*n*n)  # trim
+  x = x.reshape(n,2*n).shrink_to(n,n)            # windows
+  return x.sum(-1)                               # reduce
+
+# arange: prefix_sum of all 1s gives [1,2,...,n], subtract 1 for [0,1,...,n-1]
+def arange(n):
+  return prefix_sum(Tensor(1).reshape(1).expand(n)) - 1
+
+# gather: out[i] = T[idx[i]]. one-hot mask along gather axis, then reduce
+def gather(T, idx):
+  K = T.shape[0]
+  pos = arange(K).reshape(K, 1)                     # (K, 1)
+  mask = (pos == idx.reshape(1, -1)).cast(T.dtype)  # (K, D)
+  return (T.reshape(K, 1) * mask).sum(0)            # (D,)
+
+# scatter_add: T[idx[i]] += val[i]
+def scatter_add(T, idx, val):
+  K, D = T.shape[0], idx.shape[0]
+  pos = arange(K).reshape(K, 1)                     # (K, 1)
+  mask = (pos == idx.reshape(1, D)).cast(T.dtype)   # (K, D)
+  return T + (mask * val.reshape(1, D)).sum(1)      # (K,)
+\end{lstlisting}
+
+%% ============================================================
 \subsection*{Derived Properties}
 
 Every UOp has a \textbf{dtype}, \textbf{shape}, and \textbf{device}, derived from its op, src, and arg:
@@ -165,14 +207,17 @@ Movement ops & $\mathrm{src}[0].\mathrm{dtype}$ & (see op) & $\mathrm{src}[0].\m
 \op{Cast}, \op{Bitcast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
 \op{Copy} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & from arg \\
 ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
+ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\
+\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
 \op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ \\
 \op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining: $(s_k, \ldots, s_{n-1})$ & $\mathrm{src}[0].\mathrm{device}$ \\
 \op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
 \op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
 \bottomrule
 \end{tabular}
+
+\smallskip
+$\mathrm{broadcast}(\mathrm{src})$: right-align shapes and take the element-wise max. Each axis must be equal or $1$.
 
 \end{document}
