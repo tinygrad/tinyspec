@@ -257,4 +257,36 @@ def scatter_add(T, idx, val):
   return T + (mask * val.reshape(1, D)).sum(1)      # (K,)
 \end{lstlisting}
 
+%% ============================================================
+\subsection*{{\color{multipurple}Multi-Device Collectives} \normalfont\small--- derived from primitives}
+
+Let $T$ have shape $(s,)$ on a single device, and $D = (d_0, \ldots, d_{n-1})$ be an $n$-tuple device.
+\op{Copy} to an $n$-tuple device is always contiguous: it produces shape $(n \cdot s, \ldots)$ with axis $= 0$, like \op{Buffer}.
+
+\begin{lstlisting}
+# broadcast/allgather: replicate T to all n devices
+def broadcast(T):
+  return T.reshape(1, s).expand(n, s).copy(D).reduce(Ops.NOOP, 0)  # (s,) on D, axis=null
+
+# scatter: split T into n chunks, one per device
+def scatter(T):
+  return T.copy(D)                                                  # (s,) on D, axis=0
+
+# gather: collect all shards onto one device
+def gather(T):
+  return T.copy(D[2])                                               # (n*s,) on D[2], axis=null
+
+# reduce: sum all shards onto one device
+def reduce(T):
+  return T.copy(D[2]).reshape(n, s).sum(0)                          # (s,) on D[2], axis=null
+
+# allreduce: sum all shards, replicate result to all
+def allreduce(T):
+  return T.reshape(1, s).expand(n, s).copy(D).sum(0)               # (s,) on D, axis=null
+
+# reduce_scatter: reduce across devices, scatter result. T is (n*s,) on D, axis=0
+def reduce_scatter(T):
+  return T.reshape(n, n, s//n).permute(1, 0, 2).copy(D).sum(1)    # (s//n,) on D, axis=0
+\end{lstlisting}
+
 \end{document}
