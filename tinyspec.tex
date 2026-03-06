@@ -16,6 +16,7 @@
 \definecolor{elwyellow}{HTML}{F9A825}
 \definecolor{callblue}{HTML}{1565C0}
 \definecolor{assigngray}{HTML}{616161}
+\definecolor{multipurple}{HTML}{7B1FA2}
 
 \title{tinygrad: a single dialect from Tensor programs to command buffers}
 \author{}
@@ -145,6 +146,20 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 
 \smallskip
 Assign is \op{Store} followed by \op{After}: write the value, then return the buffer with an ordering dependency.
+
+%% ============================================================
+\subsection*{{\color{multipurple}Multi Ops} \normalfont\small--- cross-device sharding}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Multi} & $(T,)$ & axis & Join along axis across devices. Shape inflated by device count. \\
+\op{Mstack} & $(T_0, T_1, \ldots)$ & --- & Combine single-device buffers into a multi-device buffer. \\
+\op{Mselect} & $(T,)$ & index & Select one device's buffer from a multi-device buffer. \\
+\op{Allreduce} & $(T,)$ & op & Reduce across devices. Op is \op{Add} or \op{Max}. \\
+\bottomrule
+\end{tabular}
 
 %% ============================================================
 \subsection*{Other Ops}
