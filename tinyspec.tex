@@ -37,18 +37,18 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
 \op{Buffer} & () & size, dtype, device &
-  A flat allocation of memory with shape $(\textit{size},)$. \\[4pt]
+  A flat allocation of memory with shape $(\textit{size},)$. \\
+\op{Param} & $(\mathbf{s},)$ & slot, dtype, device & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\[4pt]
 \op{Const} & () & value, dtype &
   A scalar constant with shape $(\ )$. \\
 \op{Vconst} & () & values, dtype &
   A vector constant with shape $(n,)$. \\[4pt]
-\op{Var} & (min, max) & slot, dtype & A symbolic variable in range $[\text{min}, \text{max}]$. Shape $(\ )$. \\[4pt]
-\op{Param} & $(\mathbf{s},)$ & slot, dtype, device & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\
+\op{Var} & (min, max) & slot, dtype & A symbolic variable in range $[\text{min}, \text{max}]$. Shape $(\ )$. \\
 \bottomrule
 \end{tabular}
 
 %% ============================================================
-\subsection*{{\color{movgreen}Movement Ops} \normalfont\small--- no arithmetic, shapes are \op{Stack} UOps in src}
+\subsection*{{\color{movgreen}Movement Ops} \normalfont\small--- no arithmetic, shapes are $(k,)$-shaped UOps with dtype \texttt{index} in src}
 
 \begin{tabular}{@{}l l l l@{}}
 \toprule
@@ -58,10 +58,10 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \op{Flip} & $(T,)$ & bools $\mathbf{f}$ & Reverse along flagged axes. \\
 \op{Reshape} & $(T, \mathbf{s'})$ & --- & Reinterpret in row-major order. $\prod s_k = \prod s'_k$. \\
 \op{Expand} & $(T, \mathbf{s'})$ & --- & Broadcast size-1 axes. $s_k \in \{1, s'_k\}$. \\
-\op{Pad} & $(T, \mathbf{s'})$ & --- & Pad right side with $0$s to a larger shape. \\
-\op{Shrink} & $(T, \mathbf{s'})$ & --- & Shrink from the right side. Inverse of \op{Pad}. \\
+\op{Pad} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Pad with $0$s: $b_k$ before, $e_k$ after each axis. \\
+\op{Shrink} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Keep $[b_k, e_k)$ per axis. Inverse of \op{Pad}. \\
 \op{Index} & $(T, i_0, i_1, \ldots)$ & --- & Index from the left: $k$ indices consume $k$ leading dims. \\
-\op{Stack} & $(T_0, T_1, \ldots)$ & --- & Stack along a new leading axis. Also encodes shapes. \\
+\op{Cat} & $(T_0, T_1, \ldots)$ & axis & Join along axis. $-1$ creates a new leading axis. \\
 \bottomrule
 \end{tabular}
 
