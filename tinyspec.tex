@@ -28,7 +28,7 @@
 
 \section*{UOps}
 
-All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has five derived properties --- \textbf{dtype}, \textbf{shape}, \textbf{device}, \textbf{min\_max}, and \textbf{axis} --- determined by the rules at the end of this document.
+All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg},\;\mathrm{tag})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, $\mathrm{arg}$ is op-dependent, and $\mathrm{tag}$ is for temporary processing. The full program is a DAG of UOps. Each UOp has five derived properties --- \textbf{dtype}, \textbf{shape}, \textbf{device}, \textbf{min\_max}, and \textbf{axis} --- determined by the rules at the end of this document.
 
 %% ============================================================
 \subsection*{Source Ops \normalfont\small--- leaf nodes}
