@@ -27,7 +27,7 @@
 
 \section*{UOps}
 
-All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has three derived properties --- \textbf{dtype}, \textbf{shape}, and \textbf{device} --- determined by the rules at the end of this document.
+All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{op},\;\mathrm{src},\;\mathrm{arg})$ where $\mathrm{op}$ is from the set below, $\mathrm{src}$ is a tuple of input UOps, and $\mathrm{arg}$ is op-dependent. The full program is a DAG of UOps. Each UOp has four derived properties --- \textbf{dtype}, \textbf{shape}, \textbf{device}, and \textbf{min\_max} --- determined by the rules at the end of this document.
 
 %% ============================================================
 \subsection*{Source Ops \normalfont\small--- leaf nodes}
@@ -38,12 +38,12 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \midrule
 \op{Buffer} & () & size, dtype, device &
   A flat allocation of memory with shape $(\textit{size},)$. \\
-\op{Param} & $(\mathbf{s},)$ & slot, dtype, device & Bound variable with shape $\mathbf{s}$. Replaced by $a_{\text{slot}}$ in \op{Call}. \\[4pt]
+\op{Param} & $(\mathbf{s})$ or $(\mathbf{s}, \text{min}, \text{max})$ & slot, dtype, device? &
+  Placeholder with shape $\mathbf{s}$. Substituted in \op{Call}. \\[4pt]
 \op{Const} & () & value, dtype &
   A scalar constant with shape $(\ )$. \\
 \op{Vconst} & () & values, dtype &
-  A vector constant with shape $(n,)$. \\[4pt]
-\op{Var} & (min, max) & slot, dtype & A symbolic variable in range $[\text{min}, \text{max}]$. Shape $(\ )$. \\
+  A vector constant with shape $(n,)$. \\
 \bottomrule
 \end{tabular}
 
@@ -66,13 +66,13 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a triple $(\mathrm{o
 \end{tabular}
 
 %% ============================================================
-\subsection*{{\color{reducered}Reduce Ops} \normalfont\small--- inverse of \op{Expand}: collapse axes of size $s_k$ to $1$}
+\subsection*{{\color{reducered}Reduce Ops} \normalfont\small--- collapse axes to size $1$}
 
 \begin{tabular}{@{}l l l l@{}}
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Reduce} & $(T, \mathbf{s'})$ & \op{Add} or \op{Max} & Sum or max over axes where $s'_k = 1$ and $s_k > 1$. \\
+\op{Reduce} & $(T, f, \text{init})$ & axes & Reduce $T$ along axes using binary function $f$ with initial value. \\
 \bottomrule
 \end{tabular}
 
@@ -95,7 +95,11 @@ Unary & $(T,)$
 & & \op{Copy}
   & Copy to target device (specified in arg). \\
 & & \op{Contiguous}
-  & Force a contiguous memory layout. Identity on data. \\[4pt]
+  & Identity on data. Force contiguous memory layout. \\
+& & \op{ContiguousBackward}
+  & Identity on data. Force contiguous in backward pass. \\
+& & \op{Detach}
+  & Identity on data. Stops gradient propagation. \\[4pt]
 Binary & $(A, B)$
   & \op{Add}, \op{Mul}, \op{Max}, \op{Mod}, \op{Idiv}
   & $a+b$, $a \cdot b$, $\max(a,b)$, $a \bmod b$, $\lfloor a/b \rfloor$ \\
@@ -155,6 +159,44 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \end{tabular}
 
 %% ============================================================
+\subsection*{Derived Properties}
+
+Every UOp has a \textbf{dtype}, \textbf{shape}, \textbf{device}, and \textbf{min\_max}, derived from its op, src, and arg:
+
+\medskip
+\begin{tabular}{@{}l l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{dtype} & \textbf{shape} & \textbf{device} & \textbf{min\_max} \\
+\midrule
+\op{Buffer} & from arg & $(\text{size},)$ from arg & from arg & dtype range \\
+\op{Const} & from arg & $()$ & \textsc{null} & $[v, v]$ \\
+\op{Param} & from arg & from $\mathrm{src}[0]$ & from arg & from src or dtype range \\[3pt]
+Movement ops & $\mathrm{src}[0].\mathrm{dtype}$ & (see op) & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
+\op{Reduce} & $\mathrm{src}[0].\mathrm{dtype}$ & collapse axes to $1$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\[3pt]
+\op{Cast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & clamped to dtype \\
+\op{Bitcast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
+\op{Copy} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & from arg & $\mathrm{src}[0]$ \\
+ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
+\op{Add} & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & $[a+b,\, A+B]$ \\
+\op{Mul} & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & $[\min,\max]$ of products \\
+\op{Max} & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & $[\max(a,b),\, \max(A,B)]$ \\
+Other binary & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
+\op{CmpLt}, \op{CmpNe} & bool & broadcast & $\mathrm{src}[0].\mathrm{device}$ & from intervals \\
+\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & $[\min(b,c),\, \max(B,C)]$ \\[3pt]
+\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ & dtype range \\
+\op{Range} & index & $()$ & \textsc{null} & $[0,\, n{-}1]$ \\
+\op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining dims & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
+\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & --- \\
+\op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+$\mathrm{broadcast}$: right-align shapes, element-wise max; each axis must be equal or $1$.
+$[a,A]$, $[b,B]$, $[c,C]$ denote min\_max of $\mathrm{src}[0]$, $\mathrm{src}[1]$, $\mathrm{src}[2]$.
+Default \emph{dtype range}: $[\mathrm{dtype\_min},\, \mathrm{dtype\_max}]$.
+
+%% ============================================================
 \subsection*{Common Ops as Compositions}
 
 All high-level tensor operations decompose into the primitives above.
@@ -193,37 +235,5 @@ def scatter_add(T, idx, val):
   mask = (pos == idx.reshape(1, D)).cast(T.dtype)   # (K, D)
   return T + (mask * val.reshape(1, D)).sum(1)      # (K,)
 \end{lstlisting}
-
-%% ============================================================
-\subsection*{Derived Properties}
-
-Every UOp has a \textbf{dtype}, \textbf{shape}, and \textbf{device}, derived from its op, src, and arg:
-
-\medskip
-\begin{tabular}{@{}l l l l@{}}
-\toprule
-\textbf{Op} & \textbf{dtype} & \textbf{shape} & \textbf{device} \\
-\midrule
-\op{Buffer} & from arg & $(\text{size},)$ from arg & from arg \\
-\op{Const} & from arg & $()$ & \textsc{null} \\
-\op{Var} & from arg & $()$ & \textsc{null} \\
-\op{Param} & from arg & from $\mathrm{src}[0]$ & from arg \\[3pt]
-Movement ops & $\mathrm{src}[0].\mathrm{dtype}$ & (see op) & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{Reduce} & $\mathrm{src}[0].\mathrm{dtype}$ & from $\mathrm{src}[1]$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
-\op{Cast}, \op{Bitcast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{Copy} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & from arg \\
-ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-ALU binary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{CmpLt}, \op{CmpNe} & bool & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & $\mathrm{broadcast}(\mathrm{src})$ & $\mathrm{src}[0].\mathrm{device}$ \\[3pt]
-\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ \\
-\op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining: $(s_k, \ldots, s_{n-1})$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ \\
-\bottomrule
-\end{tabular}
-
-\smallskip
-$\mathrm{broadcast}(\mathrm{src})$: right-align shapes and take the element-wise max. Each axis must be equal or $1$.
 
 \end{document}
