@@ -172,6 +172,7 @@ Ternary & $(P, A, B)$
 \op{Log2} & exponent extract + polynomial approx & $\log_2 x$ \\
 \op{Sin} & argument reduction + polynomial approx & $\sin x$ \\
 \op{Sqrt} & \op{Exp2}($0.5 \cdot$ \op{Log2}($A$)) & $\sqrt{x}$ \\
+\op{Pow} & \op{Exp2}(\op{Log2}($A$) $\cdot\, B$) & $a^b$ \\
 \op{Threefry} & 5 rounds of add-rotate-xor (ARX) & Threefry 2x32 PRNG \\
 \bottomrule
 \end{tabular}
