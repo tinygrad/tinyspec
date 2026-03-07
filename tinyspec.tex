@@ -87,8 +87,8 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \textbf{Arity} & \textbf{src} & \textbf{Op} & \textbf{Semantics} \\
 \midrule
 Unary & $(T,)$
-  & \op{Exp2}, \op{Log2}, \op{Sin}, \op{Sqrt}, \op{Neg}, \op{Recip}
-  & $2^x$, $\log_2 x$, $\sin x$, $\sqrt{x}$, $-x$, $1/x$ \\
+  & \op{Neg}, \op{Recip}
+  & $-x$, $1/x$ \\
 & & \op{Trunc}
   & $\mathrm{trunc}(x)$: round toward zero. \\
 & & \op{Cast}
@@ -109,9 +109,7 @@ Binary & $(A, B)$
 & & \op{CmpLt}, \op{CmpNe}
   & $[a < b]$, $[a \ne b]$ \\
 & & \op{Xor}, \op{Or}, \op{And}, \op{Shr}, \op{Shl}
-  & $a \oplus b$, $a \mid b$, $a \mathbin{\&} b$, $a \gg b$, $a \ll b$ \\
-& & \op{Threefry}
-  & One round of the Threefry 2x32 PRNG. \\[4pt]
+  & $a \oplus b$, $a \mid b$, $a \mathbin{\&} b$, $a \gg b$, $a \ll b$ \\[4pt]
 Ternary & $(P, A, B)$
   & \op{Where}
   & $A[\mathbf{i}]$ if $P[\mathbf{i}] \ne 0$, else $B[\mathbf{i}]$ \\
@@ -119,8 +117,28 @@ Ternary & $(P, A, B)$
 \bottomrule
 \end{tabular}
 
+\medskip
+\textbf{Decomposed elementwise ops} --- defined in terms of the primitives above.
+
 \smallskip
-Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt} with swapped operands.
+\begin{tabular}{@{}l l l@{}}
+\toprule
+\textbf{Op} & \textbf{Decomposition} & \textbf{Semantics} \\
+\midrule
+\op{Sub} & \op{Add}(\op{Neg}($B$), $A$) & $a - b$ \\
+\op{Div} & \op{Mul}(\op{Recip}($B$), $A$) & $a / b$ \\
+\op{CmpGt} & \op{CmpLt}($B$, $A$) & $[a > b]$ \\
+\op{CmpGe} & \op{Neg}(\op{CmpLt}($A$, $B$)) & $[a \ge b]$ \\
+\op{CmpLe} & \op{Neg}(\op{CmpLt}($B$, $A$)) & $[a \le b]$ \\
+\op{CmpEq} & \op{Neg}(\op{CmpNe}($A$, $B$)) & $[a = b]$ \\
+\op{Not} & \op{CmpNe}($A$, $1$) & $\lnot a$ \\[4pt]
+\op{Exp2} & polynomial approx + \op{Mul}, \op{Add} & $2^x$ \\
+\op{Log2} & exponent extract + polynomial approx & $\log_2 x$ \\
+\op{Sin} & argument reduction + polynomial approx & $\sin x$ \\
+\op{Sqrt} & \op{Exp2}($0.5 \cdot$ \op{Log2}($A$)) & $\sqrt{x}$ \\
+\op{Threefry} & 5 rounds of add-rotate-xor (ARX) & Threefry 2x32 PRNG \\
+\bottomrule
+\end{tabular}
 
 %% ============================================================
 \subsection*{{\color{callblue}Call Ops} \normalfont\small--- function abstraction, like the lambda calculus}
@@ -156,6 +174,7 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \midrule
 \op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
 \op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
+\op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
 \bottomrule
 \end{tabular}
 
@@ -189,7 +208,6 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
 \op{Program} & (linear, source, binary) & --- & Compiled kernel: instruction list, source code, machine code. \\
-\op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
 \op{Source} & () & str & Human-readable rendered source code. \\
 \op{Binary} & () & bytes & Compiled machine code. \\
 \bottomrule
