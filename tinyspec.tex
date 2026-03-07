@@ -81,6 +81,47 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \end{tabular}
 
 %% ============================================================
+\subsection*{{\color{callblue}Call Ops} \normalfont\small--- function abstraction, like the lambda calculus}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
+\op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
+\op{Tuple} & $(v_0, v_1, \ldots)$ & --- & Pack values into a tuple. \\
+\op{GetTuple} & $(T,)$ & idx & Extract element at idx from a \op{Tuple}. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{{\color{multipurple}Store Ops} \normalfont\small--- side effects}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{Store} & (buf, val) & --- & Write val into buf. \\
+\bottomrule
+\end{tabular}
+
+%% ============================================================
+\subsection*{{\color{assignbrown}Ordering Ops} \normalfont\small--- execution order}
+
+\begin{tabular}{@{}l l l l@{}}
+\toprule
+\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
+\op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+Assign is \op{Store} followed by \op{After}: write the value, then return the buffer with an ordering dependency.
+
+%% ============================================================
 \subsection*{{\color{elwyellow}Elementwise Ops} \normalfont\small--- all inputs same shape, output same shape, applied per-element}
 
 \begin{tabular}{@{}l l l l@{}}
@@ -134,47 +175,6 @@ Ternary & $(P, A, B)$
 \op{Threefry} & 5 rounds of add-rotate-xor (ARX) & Threefry 2x32 PRNG \\
 \bottomrule
 \end{tabular}
-
-%% ============================================================
-\subsection*{{\color{callblue}Call Ops} \normalfont\small--- function abstraction, like the lambda calculus}
-
-\begin{tabular}{@{}l l l l@{}}
-\toprule
-\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
-\midrule
-\op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
-\op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
-\op{Tuple} & $(v_0, v_1, \ldots)$ & --- & Pack values into a tuple. \\
-\op{GetTuple} & $(T,)$ & idx & Extract element at idx from a \op{Tuple}. \\
-\bottomrule
-\end{tabular}
-
-%% ============================================================
-\subsection*{{\color{multipurple}Store Ops} \normalfont\small--- side effects}
-
-\begin{tabular}{@{}l l l l@{}}
-\toprule
-\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
-\midrule
-\op{Store} & (buf, val) & --- & Write val into buf. \\
-\bottomrule
-\end{tabular}
-
-%% ============================================================
-\subsection*{{\color{assignbrown}Ordering Ops} \normalfont\small--- execution order}
-
-\begin{tabular}{@{}l l l l@{}}
-\toprule
-\textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
-\midrule
-\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
-\op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
-\op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
-\bottomrule
-\end{tabular}
-
-\smallskip
-Assign is \op{Store} followed by \op{After}: write the value, then return the buffer with an ordering dependency.
 
 %% ============================================================
 \subsection*{{\color{markerorange}Marker Ops} \normalfont\small--- identity on data}
