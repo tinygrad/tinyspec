@@ -129,8 +129,8 @@ Assign is \op{Store} followed by \op{After}: write the value, then return the bu
 \textbf{Arity} & \textbf{src} & \textbf{Op} & \textbf{Semantics} \\
 \midrule
 Unary & $(T,)$
-  & \op{Neg}, \op{Recip}
-  & $-x$, $1/x$ \\
+  & \op{Recip}
+  & $1/x$ \\
 & & \op{Trunc}
   & $\mathrm{trunc}(x)$: round toward zero. \\
 & & \op{Cast}
@@ -161,18 +161,20 @@ Ternary & $(P, A, B)$
 \toprule
 \textbf{Op} & \textbf{Decomposition} & \textbf{Semantics} \\
 \midrule
-\op{Sub} & \op{Add}(\op{Neg}($B$), $A$) & $a - b$ \\
-\op{Div} & \op{Mul}(\op{Recip}($B$), $A$) & $a / b$ \\
+\op{Neg} & \op{Mul}($A$, $-1$) & $-x$ \\
+\op{Sub} & \op{Add}($A$, \op{Neg}($B$)) & $a - b$ \\
+\op{Div} & \op{Mul}($A$, \op{Recip}($B$)) & $a / b$ \\
 \op{CmpGt} & \op{CmpLt}($B$, $A$) & $[a > b]$ \\
-\op{CmpGe} & \op{Neg}(\op{CmpLt}($A$, $B$)) & $[a \ge b]$ \\
-\op{CmpLe} & \op{Neg}(\op{CmpLt}($B$, $A$)) & $[a \le b]$ \\
-\op{CmpEq} & \op{Neg}(\op{CmpNe}($A$, $B$)) & $[a = b]$ \\
+\op{CmpGe} & \op{CmpNe}(\op{CmpLt}($A$, $B$),\, $1$) & $[a \ge b]$ \\
+\op{CmpLe} & \op{CmpNe}(\op{CmpLt}($B$, $A$),\, $1$) & $[a \le b]$ \\
+\op{CmpEq} & \op{CmpNe}(\op{CmpNe}($A$, $B$),\, $1$) & $[a = b]$ \\
 \op{Not} & \op{CmpNe}($A$, $1$) & $\lnot a$ \\[4pt]
 \op{Exp2} & polynomial approx + \op{Mul}, \op{Add} & $2^x$ \\
 \op{Log2} & exponent extract + polynomial approx & $\log_2 x$ \\
 \op{Sin} & argument reduction + polynomial approx & $\sin x$ \\
 \op{Sqrt} & \op{Exp2}($0.5 \cdot$ \op{Log2}($A$)) & $\sqrt{x}$ \\
 \op{Pow} & \op{Exp2}(\op{Log2}($A$) $\cdot\, B$) & $a^b$ \\
+\op{Mulacc} & \op{Add}(\op{Mul}($A$, $B$),\, $C$) & $a \cdot b + c$ \\
 \op{Threefry} & 5 rounds of add-rotate-xor (ARX) & Threefry 2x32 PRNG \\
 \bottomrule
 \end{tabular}
