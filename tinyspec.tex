@@ -131,6 +131,8 @@ Sub is \op{Add}+\op{Neg}. Div is \op{Mul}+\op{Recip}. Greater-than is \op{CmpLt}
 \midrule
 \op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
 \op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
+\op{Tuple} & $(v_0, v_1, \ldots)$ & --- & Pack values into a tuple. \\
+\op{GetTuple} & $(T,)$ & idx & Extract element at idx from a \op{Tuple}. \\
 \bottomrule
 \end{tabular}
 
