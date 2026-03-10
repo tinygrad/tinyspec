@@ -289,14 +289,14 @@ An optimization is a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
 \midrule
 \op{Split} & any & (factor $k$, target, top?) &
   Split axis $n$ by $k$ into $(n/k, k)$ or $(k, n/k)$ if top. New sub-axis gets target AxisType (see table above). \\
-\op{TC} & reduce idx & (tc, opt, mode) &
-  Apply tensor core \op{Wmma}: split reduce/output axes into \texttt{WARP}, \texttt{UPCAST}, and \texttt{UNROLL} dims. \\
 \op{Padto} & any & multiple $m$ &
   Pad axis to next multiple of $m$ with validity masks. \\
 \op{Swap} & g$_i$ & g$_j$ &
   Swap two \texttt{GLOBAL} axes $i \leftrightarrow j$. \\
 \op{Nolocals} & --- & --- &
-  Disable local memory; no workgroup dims emitted. \\
+  Disable local memory; no workgroup dims emitted. \\[4pt]
+\op{TC} & reduce idx & (tc, opt, mode) &
+  Apply tensor core \op{Wmma}: split reduce/output axes into \texttt{WARP}, \texttt{UPCAST}, and \texttt{UNROLL} dims. \\
 \bottomrule
 \end{tabular}
 
