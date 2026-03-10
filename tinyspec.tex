@@ -258,6 +258,51 @@ Default \emph{dtype range}: $[\mathrm{dtype\_min},\, \mathrm{dtype\_max}]$.
 \op{Reduce} on the shard axis $\to$ \textsc{null}. \op{Copy} $\to$ \textsc{null}. ALU ops inherit from sources. Default: \textsc{null}.
 
 %% ============================================================
+\subsection*{Kernel Optimizations (OptOps) \normalfont\small--- schedule-level transforms on kernel ranges}
+
+Each kernel's iteration space is a set of \op{Range} axes. Every range has an \textbf{AxisType}.
+The core optimization is \op{Split}: split an axis $n$ by factor $k$ into $(n/k, k)$ --- or $(k, n/k)$ if top --- and assign the new sub-axis a target AxisType.
+
+\medskip
+\begin{tabular}{@{}l l l l l@{}}
+\toprule
+\textbf{AxisType} & \textbf{Letter} & \textbf{Split from} & \textbf{Direction} & \textbf{Semantics} \\
+\midrule
+\texttt{GLOBAL} & \texttt{g} & --- & --- & GPU global workgroup dimension. \\
+\texttt{LOCAL} & \texttt{l} & g, L & inner & Workgroup local dimension (shared memory). \\
+\texttt{WARP} & \texttt{w} & \multicolumn{2}{l}{(created by \op{TC})} & Warp-level lanes for tensor cores. \\
+\texttt{THREAD} & \texttt{t} & g & outer & CPU thread parallelism. \\
+\texttt{LOOP} & \texttt{L} & --- & --- & Generic sequential loop (initial state). \\
+\texttt{REDUCE} & \texttt{R} & --- & --- & Reduction axis. \\
+\texttt{GROUP\_REDUCE} & \texttt{G} & R & inner/outer & Shared-memory group reduction. \\
+\texttt{UPCAST} & \texttt{u} & g, l, L & inner & Register-level vectorization. \\
+\texttt{UNROLL} & \texttt{r} & R, G & inner & Fully unrolled loop ($k \le 32$). \\
+\bottomrule
+\end{tabular}
+
+\medskip
+The remaining optimizations are a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
+
+\smallskip
+\begin{tabular}{@{}l l l p{6.5cm}@{}}
+\toprule
+\textbf{OptOp} & \textbf{axis} & \textbf{arg} & \textbf{Semantics} \\
+\midrule
+\op{TC} & reduce idx & (tc, opt, mode) &
+  Apply tensor core \op{Wmma}: split reduce/output axes into \texttt{WARP}, \texttt{UPCAST}, and \texttt{UNROLL} dims. \\
+\op{Padto} & any & multiple $m$ &
+  Pad axis to next multiple of $m$ with validity masks. \\
+\op{Swap} & g$_i$ & g$_j$ &
+  Swap two \texttt{GLOBAL} axes $i \leftrightarrow j$. \\
+\op{Nolocals} & --- & --- &
+  Disable local memory; no workgroup dims emitted. \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+Optimizations compose left-to-right. \op{TC} must be first. The search space is explored by BEAM search or hand-coded heuristics.
+
+%% ============================================================
 \subsection*{Common Ops as Compositions}
 
 All high-level tensor operations decompose into the primitives above.
