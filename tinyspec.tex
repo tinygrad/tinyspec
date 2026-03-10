@@ -260,8 +260,7 @@ Default \emph{dtype range}: $[\mathrm{dtype\_min},\, \mathrm{dtype\_max}]$.
 %% ============================================================
 \subsection*{Kernel Optimizations (OptOps) \normalfont\small--- schedule-level transforms on kernel ranges}
 
-Each kernel's iteration space is a set of \op{Range} axes. Every range has an \textbf{AxisType}.
-The core optimization is \op{Split}: split an axis $n$ by factor $k$ into $(n/k, k)$ --- or $(k, n/k)$ if top --- and assign the new sub-axis a target AxisType.
+Each kernel's iteration space is a set of \op{Range} axes. Every range has an \textbf{AxisType}:
 
 \medskip
 \begin{tabular}{@{}l l l l l@{}}
@@ -281,13 +280,15 @@ The core optimization is \op{Split}: split an axis $n$ by factor $k$ into $(n/k,
 \end{tabular}
 
 \medskip
-The remaining optimizations are a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
+An optimization is a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
 
 \smallskip
 \begin{tabular}{@{}l l l p{6.5cm}@{}}
 \toprule
 \textbf{OptOp} & \textbf{axis} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
+\op{Split} & any & (factor $k$, target, top?) &
+  Split axis $n$ by $k$ into $(n/k, k)$ or $(k, n/k)$ if top. New sub-axis gets target AxisType (see table above). \\
 \op{TC} & reduce idx & (tc, opt, mode) &
   Apply tensor core \op{Wmma}: split reduce/output axes into \texttt{WARP}, \texttt{UPCAST}, and \texttt{UNROLL} dims. \\
 \op{Padto} & any & multiple $m$ &
