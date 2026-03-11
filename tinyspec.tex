@@ -301,8 +301,8 @@ An optimization is a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
   Split axis $n$ by $k$ into $(n/k, k)$ or $(k, n/k)$ if top. New sub-axis gets target AxisType (see table above). \\
 \op{Padto} & any & multiple $m$ &
   Pad axis to next multiple of $m$ with validity masks. \\[4pt]
-\op{Swap} & g$_i$ & g$_j$ &
-  Swap two \texttt{GLOBAL} axes $i \leftrightarrow j$. \\
+\op{Swap} & axis$_i$ & axis$_j$ &
+  Swap two axes $i \leftrightarrow j$. \\
 \op{Nolocals} & --- & --- &
   Disable local memory; no workgroup dims emitted. \\
 \op{TC} & reduce idx & (tc, opt, mode) &
