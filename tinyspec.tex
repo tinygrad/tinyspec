@@ -18,6 +18,16 @@
 \definecolor{assignbrown}{HTML}{795548}
 \definecolor{multipurple}{HTML}{7B1FA2}
 \definecolor{markerorange}{HTML}{E65100}
+% AxisType colors (from tinygrad)
+\definecolor{axblue}{HTML}{1565C0}       % GLOBAL
+\definecolor{axcyan}{HTML}{00838F}       % LOCAL
+\definecolor{axbrcyan}{HTML}{00ACC1}     % WARP
+\definecolor{axbrblue}{HTML}{42A5F5}     % THREAD
+\definecolor{axwhite}{HTML}{616161}      % LOOP (gray on white paper)
+\definecolor{axred}{HTML}{C62828}        % REDUCE
+\definecolor{axbrred}{HTML}{E53935}      % GROUP_REDUCE
+\definecolor{axyellow}{HTML}{F9A825}     % UPCAST
+\definecolor{axmagenta}{HTML}{7B1FA2}    % UNROLL
 
 \title{tinygrad: a single dialect from Tensor programs to Command Buffers}
 \author{tinygrad, Corp. \\ \texttt{research@tinygrad.org}}
@@ -267,15 +277,15 @@ Each kernel's iteration space is a set of \op{Range} axes. Every range has an \t
 \toprule
 \textbf{AxisType} & \textbf{Letter} & \textbf{Split from} & \textbf{Direction} & \textbf{Semantics} \\
 \midrule
-\texttt{GLOBAL} & \texttt{g} & --- & --- & GPU global workgroup dimension. \\
-\texttt{LOCAL} & \texttt{l} & g, L & inner & Workgroup local dimension (shared memory). \\
-\texttt{WARP} & \texttt{w} & \multicolumn{2}{l}{(created by \op{TC})} & Warp-level lanes for tensor cores. \\
-\texttt{THREAD} & \texttt{t} & g & outer & CPU thread parallelism. \\
-\texttt{LOOP} & \texttt{L} & --- & --- & Generic sequential loop (initial state). \\
-\texttt{REDUCE} & \texttt{R} & --- & --- & Reduction axis. \\
-\texttt{GROUP\_REDUCE} & \texttt{G} & R & inner/outer & Shared-memory group reduction. \\
-\texttt{UPCAST} & \texttt{u} & g, l, L & inner & Register-level vectorization. \\
-\texttt{UNROLL} & \texttt{r} & R, G & inner & Fully unrolled loop ($k \le 32$). \\
+{\color{axblue}\texttt{GLOBAL}} & \texttt{g} & --- & --- & GPU global workgroup dimension. \\
+{\color{axcyan}\texttt{LOCAL}} & \texttt{l} & g, L & inner & Workgroup local dimension (shared memory). \\
+{\color{axbrcyan}\texttt{WARP}} & \texttt{w} & \multicolumn{2}{l}{(created by \op{TC})} & Warp-level lanes for tensor cores. \\
+{\color{axbrblue}\texttt{THREAD}} & \texttt{t} & g & outer & CPU thread parallelism. \\
+{\color{axwhite}\texttt{LOOP}} & \texttt{L} & --- & --- & Generic sequential loop (initial state). \\
+{\color{axred}\texttt{REDUCE}} & \texttt{R} & --- & --- & Reduction axis. \\
+{\color{axbrred}\texttt{GROUP\_REDUCE}} & \texttt{G} & R & inner/outer & Shared-memory group reduction. \\
+{\color{axyellow}\texttt{UPCAST}} & \texttt{u} & g, l, L & inner & Register-level vectorization. \\
+{\color{axmagenta}\texttt{UNROLL}} & \texttt{r} & R, G & inner & Fully unrolled loop. \\
 \bottomrule
 \end{tabular}
 
@@ -290,11 +300,11 @@ An optimization is a triple $(\mathrm{op},\;\mathrm{axis},\;\mathrm{arg})$:
 \op{Split} & any & (factor $k$, target, top?) &
   Split axis $n$ by $k$ into $(n/k, k)$ or $(k, n/k)$ if top. New sub-axis gets target AxisType (see table above). \\
 \op{Padto} & any & multiple $m$ &
-  Pad axis to next multiple of $m$ with validity masks. \\
+  Pad axis to next multiple of $m$ with validity masks. \\[4pt]
 \op{Swap} & g$_i$ & g$_j$ &
   Swap two \texttt{GLOBAL} axes $i \leftrightarrow j$. \\
 \op{Nolocals} & --- & --- &
-  Disable local memory; no workgroup dims emitted. \\[4pt]
+  Disable local memory; no workgroup dims emitted. \\
 \op{TC} & reduce idx & (tc, opt, mode) &
   Apply tensor core \op{Wmma}: split reduce/output axes into \texttt{WARP}, \texttt{UPCAST}, and \texttt{UNROLL} dims. \\
 \bottomrule
