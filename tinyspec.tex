@@ -112,7 +112,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Store} & (buf, val) & --- & Write val into buf. \\
+\op{Store} & (buf, val) & --- & Write val into buf. buf.shape $=$ val.shape. Output is void with no shape. \\
 \bottomrule
 \end{tabular}
 
@@ -253,7 +253,7 @@ Other binary & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\
 \op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ & dtype range \\
 \op{Range} & index & $()$ & \textsc{null} & $[0,\, n{-}1]$ \\
 \op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining dims & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
-\op{Store} & void & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & --- \\
+\op{Store} & void & $()$ & $\mathrm{src}[0].\mathrm{device}$ & --- \\
 \op{After} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
 \bottomrule
 \end{tabular}
@@ -356,11 +356,13 @@ def scatter_add(T, idx, val):
 %% ============================================================
 \subsection*{{\color{multipurple}Multi-Device Collectives} \normalfont\small--- derived from primitives}
 
-Let $T$ have shape $(s,)$ on a single device, and $D = (d_0, \ldots, d_{n-1})$ be an $n$-tuple device.
-\op{Copy} to an $n$-tuple device is always contiguous: it produces shape $(n \cdot s, \ldots)$ with axis $= 0$, like \op{Buffer}.
+Let $D = (d_0, \ldots, d_{n-1})$ be an $n$-tuple device.
+\op{Copy} to an $n$-tuple device reshards with axis $= 0$. \op{Copy} never changes shape.
 
 \begin{lstlisting}
-# broadcast/allgather: replicate T to all n devices
+# T has shape (s,) on a single device.
+
+# broadcast: replicate T to all n devices
 def broadcast(T):
   return T.reshape(1, s).expand(n, s).copy(D).replicated(0)        # (s,) on D, axis=null
 
@@ -368,21 +370,27 @@ def broadcast(T):
 def scatter(T):
   return T.copy(D)                                                  # (s,) on D, axis=0
 
+# T has shape (n*s,) on D with axis=0, so each device holds (s,) elements.
+
 # gather: collect all shards onto one device
 def gather(T):
-  return T.copy(D[2])                                               # (n*s,) on D[2], axis=null
+  return T.copy(D[0])                                               # (n*s,) on D[0], axis=null
 
-# reduce: sum all shards onto one device
+# reduce: gather + sum
 def reduce(T):
-  return T.copy(D[2]).reshape(n, s).sum(0)                          # (s,) on D[2], axis=null
+  return gather(T).reshape(n, s).sum(0)                             # (s,) on D[0], axis=null
 
-# allreduce: sum all shards, replicate result to all
-def allreduce(T):
-  return T.reshape(1, s).expand(n, s).copy(D).sum(0)               # (s,) on D, axis=null
+# allgather: collect all shards, replicate to all devices
+def allgather(T):
+  return T.reshape(1, n*s).expand(n, n*s).copy(D).replicated(0)    # (n*s,) on D, axis=null
 
-# reduce_scatter: reduce across devices, scatter result. T is (n*s,) on D, axis=0
+# reduce_scatter: reduce across devices, scatter result
 def reduce_scatter(T):
-  return T.reshape(n, n, s//n).permute(1, 0, 2).copy(D).sum(1)    # (s//n,) on D, axis=0
+  return T.reshape(n, n, s//n).permute(1, 0, 2).copy(D).sum(1).reshape(s)  # (s,) on D, axis=0
+
+# allreduce: reduce_scatter + allgather
+def allreduce(T):
+  return allgather(reduce_scatter(T))                                       # (s,) on D, axis=null
 \end{lstlisting}
 
 \end{document}
