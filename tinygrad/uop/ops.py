@@ -153,6 +153,11 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
       reduce_op, axes = self.arg
       return tuple(1 if i in axes else s for i, s in enumerate(self.src[0].shape))
 
+    # replicated: collapse axes to 1 (marks as replicated, no arithmetic)
+    if self.op is Ops.REPLICATED:
+      axes = self.arg
+      return tuple(1 if i in axes else s for i, s in enumerate(self.src[0].shape))
+
     # elementwise: broadcast all shaped inputs
     if self.op in GroupOp.ALU | {Ops.CAST, Ops.BITCAST, Ops.COPY, Ops.CONTIGUOUS, Ops.CONTIGUOUS_BACKWARD, Ops.DETACH}:
       shaped = [s.shape for s in self.src]

@@ -40,8 +40,8 @@ class Ops(IntEnum):
   # program ops
   PROGRAM = auto(); LINEAR = auto(); INS = auto(); SOURCE = auto(); BINARY = auto()
 
-  # reduce op arguments
-  NOOP = auto()
+  # reduce-like ops
+  REPLICATED = auto()
 
 class GroupOp:
   Unary = {Ops.EXP2, Ops.LOG2, Ops.SIN, Ops.SQRT, Ops.NEG, Ops.RECIP, Ops.TRUNC}

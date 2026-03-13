@@ -75,7 +75,6 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \op{Pad} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Pad with $0$s: $b_k$ before, $e_k$ after each axis. \\
 \op{Shrink} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Keep $[b_k, e_k)$ per axis. Inverse of \op{Pad}. \\
 \op{Index} & $(T, i_0, i_1, \ldots)$ & --- & Index from left. $()$-shaped $i$ removes dim; $(k,)$-shaped makes it $k$. \\
-\op{Cat} & $(T_0, T_1, \ldots)$ & axis & Join along axis. $-1$ creates a new leading axis. \\
 \bottomrule
 \end{tabular}
 
@@ -86,7 +85,8 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Reduce} & $(T,)$ & op, axes & Reduce $T$ along axes. Op is \op{Add}, \op{Max}, \op{Mul}, or \op{Noop}. \\
+\op{Reduce} & $(T,)$ & op, axes & Reduce $T$ along axes. Op is \op{Add}, \op{Max}, or \op{Mul}. \\
+\op{Replicated} & $(T,)$ & axes & Mark $T$ as replicated along axes. \\
 \bottomrule
 \end{tabular}
 
@@ -238,7 +238,8 @@ Every UOp has a \textbf{dtype}, \textbf{shape}, \textbf{device}, \textbf{min\_ma
 \op{Const} & from arg & $()$ & \textsc{null} & $[v, v]$ \\
 \op{Param} & from arg & from $\mathrm{src}[0]$ & from arg & from src or dtype range \\[3pt]
 Movement ops & $\mathrm{src}[0].\mathrm{dtype}$ & (see op) & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
-\op{Reduce} & $\mathrm{src}[0].\mathrm{dtype}$ & collapse axes to $1$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\[3pt]
+\op{Reduce} & $\mathrm{src}[0].\mathrm{dtype}$ & collapse axes to $1$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
+\op{Replicated} & $\mathrm{src}[0].\mathrm{dtype}$ & collapse axes to $1$ & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\[3pt]
 \op{Cast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & clamped to dtype \\
 \op{Bitcast} & from arg & $\mathrm{src}[0].\mathrm{shape}$ & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
 \op{Copy} & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ & from arg & $\mathrm{src}[0]$ \\
@@ -265,7 +266,7 @@ Default \emph{dtype range}: $[\mathrm{dtype\_min},\, \mathrm{dtype\_max}]$.
 \medskip
 \textbf{axis} tracks the multi-device sharding dimension. \op{Buffer} with $n$-tuple device: axis $= 0$ (device dim).
 \op{Reshape} remaps axis to preserve the shard boundary. \op{Permute} follows the permutation.
-\op{Reduce} on the shard axis $\to$ \textsc{null}. \op{Copy} $\to$ \textsc{null}. ALU ops inherit from sources. Default: \textsc{null}.
+\op{Reduce} on the shard axis $\to$ \textsc{null}. \op{Replicated} on the shard axis $\to$ \textsc{null}. \op{Copy} $\to$ \textsc{null}. ALU ops inherit from sources. Default: \textsc{null}.
 
 %% ============================================================
 \subsection*{Kernel Optimizations (OptOps) \normalfont\small--- schedule-level transforms on kernel ranges}
@@ -361,7 +362,7 @@ Let $T$ have shape $(s,)$ on a single device, and $D = (d_0, \ldots, d_{n-1})$ b
 \begin{lstlisting}
 # broadcast/allgather: replicate T to all n devices
 def broadcast(T):
-  return T.reshape(1, s).expand(n, s).copy(D).reduce(Ops.NOOP, 0)  # (s,) on D, axis=null
+  return T.reshape(1, s).expand(n, s).copy(D).replicated(0)        # (s,) on D, axis=null
 
 # scatter: split T into n chunks, one per device
 def scatter(T):
