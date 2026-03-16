@@ -98,8 +98,12 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
     if self.op in GroupOp.Movement | GroupOp.Unary | (GroupOp.Binary - GroupOp.Comparison) | \
        {Ops.REDUCE, Ops.COPY, Ops.CONTIGUOUS, Ops.CONTIGUOUS_BACKWARD, Ops.DETACH, Ops.AFTER}:
       return self.src[0].dtype
-    # call: body dtype
-    if self.op is Ops.CALL: return self.src[0].dtype
+    # call: void (use GetTuple to extract)
+    if self.op is Ops.CALL: return dtypes.void
+    # extract: resolve target from Call (src[idx]) or After (src[idx+1])
+    if self.op is Ops.EXTRACT:
+      off = 1 if self.src[0].op is Ops.AFTER else 0
+      return self.src[0].src[self.arg + off].dtype
     # range: index
     if self.op is Ops.RANGE: return dtypes.index
     # store, sink: void
@@ -165,8 +169,11 @@ class UOp(OpMixin, metaclass=UOpMetaClass):
       if len(shaped) == 1: return shaped[0]
       return _broadcast_shape(*shaped)
 
-    # call: body shape; range: scalar
-    if self.op is Ops.CALL: return self.src[0].shape
+    # call: void, no shape; gettuple: from call.src[idx]; range: scalar
+    if self.op is Ops.CALL: return ()
+    if self.op is Ops.EXTRACT:
+      off = 1 if self.src[0].op is Ops.AFTER else 0
+      return self.src[0].src[self.arg + off].shape
     if self.op is Ops.RANGE: return ()
     # store/after: passthrough src[0]
     if self.op is Ops.STORE: return self.src[0].shape

@@ -29,7 +29,7 @@ class Ops(IntEnum):
   WHERE = auto()
 
   # call ops
-  CALL = auto(); RANGE = auto()
+  CALL = auto(); EXTRACT = auto(); RANGE = auto()
 
   # store ops
   STORE = auto()
