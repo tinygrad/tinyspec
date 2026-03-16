@@ -53,7 +53,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \op{BufferView} & (buf,) & size, dtype, offset &
   Zero-copy view: $(\textit{size},)$ slice of buf at element offset. \\
 \op{Param} & $(\mathbf{s})$ or $(\mathbf{s}, \text{min}, \text{max})$ & slot, dtype, device? &
-  Placeholder with shape $\mathbf{s}$. Slot indexes into \op{Call} src. \\[4pt]
+  Placeholder with shape $\mathbf{s}$. Substituted in \op{Call}. \\[4pt]
 \op{Const} & () & value, dtype &
   A scalar constant with shape $(\ )$. \\
 \op{Vconst} & () & values, dtype &
@@ -98,9 +98,10 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Call} & $(s_0, s_1, \ldots)$ & --- & Substitute each \op{Param} $k$ with $s_k$. Multiple bodies, void output. \\
-\op{Extract} & $(\text{compound},)$ & idx & Extract element. \op{Call}: $\mathrm{src}[\mathrm{idx}]$. \op{After}: $\mathrm{src}[\mathrm{idx}{+}1]$. \\
+\op{Call} & (body, $a_0$, $a_1$, \ldots) & --- & Substitute each \op{Param} $k$ in body with $a_k$. \\
 \op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
+\op{Tuple} & $(v_0, v_1, \ldots)$ & --- & Pack values into a tuple. \\
+\op{GetTuple} & $(T,)$ & idx & Extract element at idx from a \op{Tuple}. \\
 \bottomrule
 \end{tabular}
 
@@ -249,8 +250,7 @@ ALU unary & $\mathrm{src}[0].\mathrm{dtype}$ & $\mathrm{src}[0].\mathrm{shape}$ 
 Other binary & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & dtype range \\
 \op{CmpLt}, \op{CmpNe} & bool & broadcast & $\mathrm{src}[0].\mathrm{device}$ & from intervals \\
 \op{Where} & $\mathrm{src}[1].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\mathrm{device}$ & $[\min(b,c),\, \max(B,C)]$ \\[3pt]
-\op{Call} & void & $()$ & \textsc{null} & --- \\
-\op{Extract} & $t.\mathrm{dtype}$ & $t.\mathrm{shape}$ & $t.\mathrm{device}$ & $t$ \\
+\op{Call} & $\mathrm{src}[0].\mathrm{dtype}$ & substitute \op{Param} shapes & $\mathrm{src}[1].\mathrm{device}$ & dtype range \\
 \op{Range} & index & $()$ & \textsc{null} & $[0,\, n{-}1]$ \\
 \op{Index} & $\mathrm{src}[0].\mathrm{dtype}$ & remaining dims & $\mathrm{src}[0].\mathrm{device}$ & $\mathrm{src}[0]$ \\
 \op{Store} & void & $()$ & $\mathrm{src}[0].\mathrm{device}$ & --- \\
@@ -262,7 +262,6 @@ Other binary & $\mathrm{src}[0].\mathrm{dtype}$ & broadcast & $\mathrm{src}[0].\
 $\mathrm{broadcast}$: right-align shapes, element-wise max; each axis must be equal or $1$.
 $[a,A]$, $[b,B]$, $[c,C]$ denote min\_max of $\mathrm{src}[0]$, $\mathrm{src}[1]$, $\mathrm{src}[2]$.
 Default \emph{dtype range}: $[\mathrm{dtype\_min},\, \mathrm{dtype\_max}]$.
-\op{Extract} target $t$: $\mathrm{src}[0].\mathrm{src}[\mathrm{idx}]$ for \op{Call}, $\mathrm{src}[0].\mathrm{src}[\mathrm{idx}{+}1]$ for \op{After}.
 
 \medskip
 \textbf{axis} tracks the multi-device sharding dimension. \op{Buffer} with $n$-tuple device: axis $= 0$ (device dim).
