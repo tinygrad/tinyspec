@@ -124,7 +124,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \midrule
 \op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
 \op{End} & (body, range) & --- & Close a \op{Range} loop. \\
-\op{After} & (val, deps\ldots) & --- & Passthrough of val; guarantees deps execute first. \\
+\op{After} & (buf, deps\ldots) & --- & Passthrough of buf; guarantees deps execute first. \\
 \op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
 \bottomrule
