@@ -398,4 +398,28 @@ def allreduce(T):
   return allgather(reduce_scatter(T))                                       # (s,) on D, axis=null
 \end{lstlisting}
 
+%% ============================================================
+\subsection*{The \texttt{@function} Decorator \normalfont\small--- graph capture via tracing}
+
+The \texttt{@function} decorator transforms a Python function on Tensors into a single \op{Call} node.
+
+\begin{lstlisting}
+@function
+def f(a: Tensor, b: Tensor) -> Tensor:
+  return a + b
+\end{lstlisting}
+
+When \texttt{f(x, y)} is called, the decorator:
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=2pt]
+  \item \textbf{Extracts inputs}: walks all arguments to find every Tensor, deduplicates by identity.
+  \item \textbf{Runs the function} lazily (no device execution), building a UOp graph from the result.
+  \item \textbf{Parameterizes}: replaces each input UOp with a \op{Param}$(k)$ placeholder.
+  \item \textbf{Wraps the body} in a \op{Tuple} (even for single returns) and creates\\
+        \op{Call}(\op{Tuple}(body), $x$, $y$).
+  \item \textbf{Returns} the result via \op{GetTuple}$(0)$, or one \op{GetTuple} per element for tuple returns.
+\end{enumerate}
+
+The result is a reusable graph fragment: the body contains only \op{Param} references, not concrete buffers. At schedule time, the \op{Call} is resolved by substituting each \op{Param}$(k)$ back with its corresponding argument $a_k$.
+
 \end{document}
