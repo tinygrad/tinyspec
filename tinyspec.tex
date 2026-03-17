@@ -50,7 +50,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \midrule
 \op{Buffer} & () & size, dtype, device &
   Shape $(n \cdot \textit{size},)$ if device is $n$-tuple, else $(\textit{size},)$. \\
-\op{View} & (buf,) & size, dtype, offset &
+\op{BufferView} & (buf,) & size, dtype, offset &
   Typed access into a buffer. Zero-copy $(\textit{size},)$ slice at offset. \\
 \op{Param} & $(\mathbf{s})$ or $(\mathbf{s}, \text{min}, \text{max})$ & slot, dtype, device? &
   Placeholder with shape $\mathbf{s}$. Substituted in \op{Call}. \\[4pt]
