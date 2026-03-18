@@ -76,7 +76,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \op{Shrink} & $(T, \mathbf{b}, \mathbf{e})$ & --- & Keep $[b_k, e_k)$ per axis. Inverse of \op{Pad}. \\
 \op{Index} & $(T, i_0, i_1, \ldots)$ & --- & Index from left. $()$-shaped $i$ removes dim; $(k,)$-shaped makes it $k$. \\
 \op{Replicated} & $(T,)$ & axes & Mark $T$ as replicated along axes. Collapse axes to $1$. \\
-\op{Stack} & $(T_0, T_1, \ldots)$ & --- & Stack tensors. Creates a new leading axis of size $n$. \\
+\op{Cat} & $(T_0, T_1, \ldots)$ & axis & Join along axis. $-1$ creates a new leading axis. \\
 \bottomrule
 \end{tabular}
 
@@ -399,7 +399,7 @@ def allreduce(T):
 \end{lstlisting}
 
 %% ============================================================
-\subsection*{The \texttt{@function} Decorator \normalfont\small--- graph capture via tracing}
+\subsection*{{\color{callblue}The \texttt{@function} Decorator} \normalfont\small--- graph capture via tracing}
 
 The \texttt{@function} decorator transforms a Python function on Tensors into a single \op{Call} node.
 
