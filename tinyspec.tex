@@ -212,6 +212,7 @@ Ternary & $(P, A, B)$
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
 \op{Load} & (idx,) & --- & Dereference: read element at index from buffer. \\
+ & & & All loads will be replaced by \op{Store}. \\
 \op{Barrier} & (deps\ldots) & --- & Synchronize threads within a workgroup. \\
 \op{Ins} & \ldots & \ldots & A single machine instruction (e.g.\ AMD ISA). \\
 \op{Special} & (bound,) & name & GPU thread/workgroup index (e.g.\ \texttt{gidx0}, \texttt{lidx1}). \\
