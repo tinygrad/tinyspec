@@ -125,7 +125,7 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \op{Range} & $(\text{bound},)$ & type & Iterator from $0$ to bound. \\
 \op{End} & (body, range) & --- & Close a \op{Range} loop. \\
 \op{After} & (buf, deps\ldots) & --- & Passthrough of buf; guarantees deps execute first. \\
-\op{Group} & $(u_0, u_1, \ldots)$ & --- & Void no-op that merges sibling dependencies into one node, often to bundle multiple \op{Store}s. It does not impose an order among the grouped sources. \\
+\op{Group} & $(u_0, u_1, \ldots)$ & --- & Void no-op that merges multiple \op{Store}s into one node, unordered. \\
 \op{Sink} & $(s_0, s_1, \ldots)$ & --- & Collect side effects into a single root node. \\
 \op{Linear} & (uops\ldots) & --- & Linearized (toposorted) instruction sequence. \\
 \bottomrule
