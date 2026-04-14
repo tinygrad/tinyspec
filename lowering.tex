@@ -1,0 +1,208 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[margin=0.75in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+
+\emergencystretch=1em
+
+\newcommand{\op}[1]{\textsc{#1}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\definecolor{callblue}{HTML}{1565C0}
+\definecolor{assignbrown}{HTML}{795548}
+\definecolor{markerorange}{HTML}{E65100}
+
+\title{tinygrad: Lowering Pipeline}
+\author{tinygrad, Corp. \\ \texttt{research@tinygrad.org}}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\section*{Overview}
+
+tinygrad lowering is really two coupled pipelines:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Whole-graph lowering and scheduling}: turn a tensor graph into a scheduled list of executable kernels.
+\item \textbf{Per-kernel lowering and code generation}: turn each scheduled kernel into \op{Program}, \op{Source}, and \op{Binary}.
+\end{enumerate}
+
+At a high level, the forms are:
+
+\[
+\text{tensor graph} \rightarrow \text{CALL graph} \rightarrow \text{kernel graph} \rightarrow \op{Linear} \rightarrow \text{ExecItem list}
+\]
+
+\[
+\text{kernel } \op{Sink} \rightarrow \text{lowered kernel } \op{Sink} \rightarrow \op{Program}(\op{Linear}, \op{Source}, \op{Binary}) \rightarrow \text{CompiledRunner}
+\]
+
+\section*{Whole-Graph Lowering and Scheduling}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Build the root sink.} 
+The entry points \code{Tensor.schedule_with_vars}, \code{Tensor.schedule}, and \code{Tensor.realize} start from a root \code{UOp.sink(...)} over the requested tensors.
+
+\item \textbf{Callify the tensor graph.}
+\code{transform_to_call} rewrites the tensor graph into a \op{Call} graph.
+Its ordered passes are:
+\begin{enumerate}[leftmargin=2em]
+\item \code{number the uops}
+\item \code{early transform tensor graph}
+\item \code{finalize call}
+\item \code{replace bufs}
+\end{enumerate}
+The result is a \op{Call} whose body is a sink of realized assignments with explicit \op{Param} inputs.
+
+\item \textbf{Build the kernel graph.}
+\code{complete_create_schedule_with_vars} rewrites each scheduled function sink through \code{pm_schedule}; this dispatches to \code{lower_sink_to_linear}, which first calls \code{get_kernel_graph}.
+
+\code{get_kernel_graph} applies the following stages:
+\begin{enumerate}[leftmargin=2em]
+\item \code{multi_pm}
+\item optional \code{fold moved afters}
+\item \code{earliest rewrites}
+\item \code{run_rangeify}
+\item \code{symbolic+reduce_collapse+debuf}
+\item \code{limit buffers}
+\item \code{bufferize to store}
+\item \code{split kernels}
+\item optional \code{fix_assign}
+\end{enumerate}
+
+The output form is a kernel dependency graph built from \op{After}, \op{Call}, \op{Store}, and \op{End}. Each kernel is now an explicit schedulable unit.
+
+\item \textbf{Rangeify the graph.}
+The semantic center of whole-graph lowering is \code{run_rangeify}. It:
+\begin{enumerate}[leftmargin=2em]
+\item computes a realize map,
+\item builds a consumer map,
+\item propagates output ranges backward from consumers,
+\item creates new \op{Range} axes when values must be realized,
+\item turns \code{REDUCE_AXIS} into \op{Reduce} with explicit reduce ranges,
+\item converts movement ops into index arithmetic, and
+\item inserts \op{Bufferize} and \op{Index} where realized values cross kernel boundaries.
+\end{enumerate}
+
+\item \textbf{Linearize kernel dependencies.}
+\code{create_schedule} topologically sorts the kernel dependency graph and returns a single \op{Linear} UOp. Each element of the \op{Linear} is a kernel \op{Call} in execution order.
+
+\item \textbf{Resolve outer calls and allocate buffers.}
+\code{pm_resolve_linear_call} resolves \code{CALL(LINEAR, ...)} by running \code{params to buffers}, allocating concrete \op{Buffer} objects, and flattening nested \op{Linear} nodes. Then \code{memory_plan_rewrite} performs memory planning across the linear schedule.
+
+\item \textbf{Emit the executable schedule.}
+\code{linear_to_schedule} converts the final \op{Linear} into a Python list of \code{ExecItem} objects. Each \code{ExecItem} contains the kernel AST, its buffers, metadata, and any fixed variable bindings.
+\end{enumerate}
+
+\section*{Per-Kernel Lowering and Code Generation}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Lower an ExecItem.}
+\code{ExecItem.lower} dispatches compute kernels through \code{get_runner}. For \op{Sink}, \op{Program}, and \op{Beam} kernels, this calls \code{get_program} with the current renderer.
+
+\item \textbf{Rewrite the kernel sink.}
+If the input is a kernel \op{Sink}, \code{get_program} first calls \code{full_rewrite_to_sink}. This is the main per-kernel lowering pipeline.
+
+Its ordered passes are:
+\begin{enumerate}[leftmargin=2em]
+\item \code{early movement ops}
+\item \code{load collapse}
+\item \code{split ranges}
+\item \code{initial symbolic}
+\item \code{simplify ranges}
+\item \code{apply_opts}
+\item \code{postopt symbolic}
+\item \code{expander}
+\item \code{add local buffers}
+\item \code{remove_reduce}
+\item \code{add gpudims}
+\item \code{add loads (code)}
+\item optional \code{create image buffers}
+\item \code{devectorize}
+\item \code{lower all index dtypes}
+\item \code{post index symbolic}
+\item optional \code{pre_matcher}
+\item \code{decompositions}
+\item \code{decomp dtypes}
+\item \code{transcendental}
+\item \code{final rewrite}
+\item \code{add control flow}
+\end{enumerate}
+
+The output is still a kernel \op{Sink}, but now it is in renderer-facing program form: explicit loads, stores, control flow, specials, local buffers, and lowered arithmetic.
+
+\item \textbf{Apply schedule-level kernel optimizations.}
+The \code{apply_opts} stage runs the postrange scheduler. Depending on context, it can:
+\begin{enumerate}[leftmargin=2em]
+\item apply explicit \code{opts_to_apply},
+\item run BEAM search,
+\item or apply hand-coded heuristics.
+\end{enumerate}
+These transforms produce the final axis layout used by code generation: \texttt{GLOBAL}, \texttt{LOCAL}, \texttt{WARP}, \texttt{THREAD}, \texttt{REDUCE}, \texttt{GROUP\_REDUCE}, \texttt{UPCAST}, and \texttt{UNROLL}.
+
+\item \textbf{Materialize \op{Program}.}
+After kernel rewriting, \code{get_program} wraps the result as \code{PROGRAM(full\_sink, DEVICE)} and runs \code{pm_to_program}. This expands the program in four stages:
+\begin{enumerate}[leftmargin=2em]
+\item \code{do_linearize}: add \op{Linear}
+\item \code{do_estimates}: compute FLOP and memory estimates
+\item \code{do_render}: add \op{Source}
+\item \code{do_compile}: add \op{Binary}
+\end{enumerate}
+
+The resulting form is:
+
+\[
+\op{Program}(\op{Sink}, \op{Device}, \op{Linear}, \op{Source}, \op{Binary})
+\]
+
+\item \textbf{Build the runtime program.}
+\code{ProgramSpec.from_uop} extracts launch dimensions, runtime variables, globals, inputs, and outputs from the \op{Program}. \code{CompiledRunner} then owns the compiled program together with its launch metadata.
+
+\item \textbf{Execute the schedule.}
+\code{run_schedule} lowers each \code{ExecItem} on demand, ensures its buffers are allocated, launches the runner, and updates performance statistics.
+\end{enumerate}
+
+\section*{Canonical Stage Names}
+
+The following names map cleanly to a spec because they denote stable transitions between graph forms:
+
+\begin{enumerate}[leftmargin=*]
+\item \code{transform_to_call}
+\item \code{get_kernel_graph}
+\item \code{run_rangeify}
+\item \code{create_schedule}
+\item \code{resolve linear call}
+\item \code{memory plan}
+\item \code{apply_opts}
+\item \code{full_rewrite_to_sink}
+\item \code{expander}
+\item \code{devectorize}
+\item \code{add gpudims}
+\item \code{add control flow}
+\item \code{linearize/render}
+\item \code{ProgramSpec.from_uop}
+\end{enumerate}
+
+\section*{Pipeline Summary}
+
+\begin{tabular}{@{}p{0.23\linewidth} p{0.27\linewidth} p{0.42\linewidth}@{}}
+\toprule
+\textbf{Stage} & \textbf{Input $\rightarrow$ Output} & \textbf{Main operation} \\
+\midrule
+Callify & tensor graph $\rightarrow$ \op{Call} graph & Realize assignments and replace external buffers with \op{Param}. \\
+Kernel graph & \op{Call} graph $\rightarrow$ kernel graph & Rangeify, bufferize, split stores into schedulable kernels. \\
+Schedule & kernel graph $\rightarrow$ \op{Linear} & Topologically order kernel dependencies. \\
+Schedule materialization & \op{Linear} $\rightarrow$ \code{list[ExecItem]} & Allocate buffers, memory-plan, and attach runtime metadata. \\
+Kernel rewrite & kernel \op{Sink} $\rightarrow$ lowered kernel \op{Sink} & Apply symbolic, layout, vectorization, reduction, and renderer-facing lowering passes. \\
+Program materialization & lowered kernel \op{Sink} $\rightarrow$ \op{Program} & Linearize, estimate, render source, and compile binary. \\
+Runtime & \op{Program} $\rightarrow$ executable runner & Extract launch metadata and execute on the target device. \\
+\bottomrule
+\end{tabular}
+
+\end{document}
