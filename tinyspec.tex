@@ -424,24 +424,23 @@ When \texttt{f(x, y)} is called, the decorator:
 
 The result is a reusable graph fragment: the body contains only \op{Param} references, not concrete buffers. At schedule time, the \op{Call} is resolved by substituting each \op{Param}$(k)$ back with its corresponding argument $a_k$.
 
+%% ============================================================
+\subsection*{Lowering Pipeline \normalfont\small--- from Tensor graph to machine code}
 
-# new subsection, lowering pipeline
-
-Callify -- Transform the Tensor graph into a single stateless function.
-
-Rangeify -- Determine the kernel split of the function.
-
-Optimize -- Swap and split ranges, determine which are parallel and which are serial
-
-Expander -- Expand the parallel ranges (into shape, not dtype.vec)
-
-Instruction Selection -- Includes WMMA and devectorizer
-
-Linearize -- Toposort and determine the order everything happens
-
-Register/Memory Plan -- Once we have the order, we can reuse non overlapping memory.
-
-Render -- Output the machine code.
+\begin{tabular}{@{}l p{9.7cm}@{}}
+\toprule
+\textbf{Stage} & \textbf{Semantics} \\
+\midrule
+\textbf{Callify} & Transform the Tensor graph into a single stateless function. \\
+\textbf{Rangeify} & Determine the kernel split of the function. \\
+\textbf{Optimize} & Swap and split ranges, and determine which axes are parallel and which are serial. \\
+\textbf{Expand} & Expand the parallel ranges into shape, soon not \texttt{dtype.vec}. \\
+\textbf{Instruction Selection} & Select target instructions, including WMMA and devectorization. \\
+\textbf{Linearize} & Topologically sort the graph and determine execution order. \\
+\textbf{Register/Memory Plan} & Reuse storage for values with non-overlapping lifetimes. \\
+\textbf{Render} & Output the machine code. \\
+\bottomrule
+\end{tabular}
 
 
 \end{document}
