@@ -424,4 +424,24 @@ When \texttt{f(x, y)} is called, the decorator:
 
 The result is a reusable graph fragment: the body contains only \op{Param} references, not concrete buffers. At schedule time, the \op{Call} is resolved by substituting each \op{Param}$(k)$ back with its corresponding argument $a_k$.
 
+
+# new subsection, lowering pipeline
+
+Callify -- Transform the Tensor graph into a single stateless function.
+
+Rangeify -- Determine the kernel split of the function.
+
+Optimize -- Swap and split ranges, determine which are parallel and which are serial
+
+Expander -- Expand the parallel ranges (into shape, not dtype.vec)
+
+Instruction Selection -- Includes WMMA and devectorizer
+
+Linearize -- Toposort and determine the order everything happens
+
+Register/Memory Plan -- Once we have the order, we can reuse non overlapping memory.
+
+Render -- Output the machine code.
+
+
 \end{document}
