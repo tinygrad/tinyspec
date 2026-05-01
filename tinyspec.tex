@@ -112,7 +112,8 @@ All nodes in the tinygrad graph are \textbf{UOps}. A UOp is a tuple $(\mathrm{op
 \toprule
 \textbf{Op} & \textbf{src} & \textbf{arg} & \textbf{Semantics} \\
 \midrule
-\op{Store} & (buf, val) & --- & Write val into buf. buf.shape $=$ val.shape. Output is void with no shape. \\
+\op{Store} & (buf, val, gate?) & --- & Write val into buf. buf.shape $=$ val.shape. \\
+  & & & If gate is present, write only when gate is true. Output is void. \\
 \bottomrule
 \end{tabular}
 
